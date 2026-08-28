@@ -4,8 +4,21 @@ import { spec } from '../lib/spec'
 
 export type Lang = 'chore' | 'yaml' | 'make' | 'json' | 'cmake' | 'console'
 
+/**
+ * Every syntax form the spec writes as its own name followed by the rest of
+ * the form — `task name { }`, `script <command...> { }` — is introduced by a
+ * literal keyword, so the highlighter can read them instead of being told.
+ * `else`, `in` and `as` are the words that only appear inside a form.
+ */
+const CHORE_KEYWORDS = new Set([
+  ...spec.syntax.filter((f) => f.syntax === f.name || f.syntax.startsWith(`${f.name} `)).map((f) => f.name),
+  'else',
+  'in',
+  'as',
+])
+
 const KEYWORDS: Record<Lang, Set<string>> = {
-  chore: new Set(['task', 'if', 'else', 'for', 'in', 'try', 'exit', 'include', 'as']),
+  chore: CHORE_KEYWORDS,
   yaml: new Set(['uses:', 'run:', 'name:', 'if:', 'shell:', 'with:', 'env:', 'steps:', 'needs:']),
   make: new Set(['ifeq', 'else', 'endif', 'ifneq']),
   json: new Set([]),

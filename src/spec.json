@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
+  "version": "1.6.0",
   "builtins": [
     {
       "name": "download",
@@ -319,6 +319,12 @@
       "meaning": "Stop the run with the given code, 0 by default. A called task's `exit` unwinds its caller too."
     },
     {
+      "name": "script",
+      "syntax": "script <command...> { <raw text> }",
+      "example": "v=$(script uv run - {\n    print(1 + 1)\n})",
+      "meaning": "Run the command and write the block to its stdin. The command is expanded like any other; the block is raw -- no variables, no escapes, no quoting rules -- and reaches the interpreter on stdin, so `uv run -`, `python3 -`, `node -` and `nu --stdin` all work. It composes like any command: captured, piped, redirected, chained. Chore values reach a block through the environment. The shared indentation is stripped. `check` reads nothing inside a block and `--dry` skips it rather than running it, which is the trade for keeping the rest of the language small enough to check and preview."
+    },
+    {
       "name": "return",
       "syntax": "return [code]",
       "example": "if exists $out { return }",
@@ -329,6 +335,12 @@
       "syntax": "task name [param[=default]...] { }",
       "example": "# Build the release binary\ntask build target { cargo build --release --target $target }",
       "meaning": "Define a task. Parameters bind to `$1`, `$2`, ... in the body. The comment line directly above the `task` is its description, which `chore list` prints."
+    },
+    {
+      "name": "require",
+      "syntax": "require major.minor.patch",
+      "example": "require 1.4.0",
+      "meaning": "State the oldest `chore` that can run this file, conventionally on the first line. It means \"at least this\", so there are no ranges or operators, and the version is compared component by component as numbers. One per file, at the top level only. An included file may state its own, and every one is checked before a task runs. An unmet requirement fails a run and `chore check`, and `chore list` warns and still lists."
     },
     {
       "name": "include",
@@ -446,11 +458,11 @@
     },
     {
       "name": "reserved tasks",
-      "rule": "`list`, `help`, `check` and `spec` are subcommands, so a task may not take those names. `::` is reserved in a task name for include namespaces."
+      "rule": "`list`, `help`, `check`, `spec`, `completions` and `init` are subcommands, so a task may not take those names. `::` is reserved in a task name for include namespaces."
     },
     {
       "name": "top-level statements",
-      "rule": "Top-level assignments are evaluated once, before the first task. `list`, `help`, `check` and `spec` never evaluate them, so those subcommands do no I/O and work even when a file a global reads is missing."
+      "rule": "Top-level assignments are evaluated once, before the first task. No subcommand evaluates them, so `list` and `check` do no I/O and work even when a file a global reads is missing."
     },
     {
       "name": "failure",
@@ -469,6 +481,10 @@
     "completions",
     "init"
   ],
-  "namespace_separator": "::"
+  "namespace_separator": "::",
+  "github_action": {
+    "uses": "getchore/setup-chore@v1",
+    "url": "https://github.com/getchore/setup-chore"
+  }
 }
 
