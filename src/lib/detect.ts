@@ -7,7 +7,7 @@ export const OS_LABEL: Record<OsKey, string> = {
 }
 
 const REPO = 'getchore/chore'
-const SITE = 'https://getchore.github.io/chore'
+const SITE = 'https://getchore.github.io'
 
 /**
  * The scripts live in installers/ and are copied into the build (see

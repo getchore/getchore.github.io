@@ -1,0 +1,69 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+  # The reference is generated from `chore spec`, so a chore release changes
+  # this site without anything here changing. Rebuild on demand, and nightly
+  # so a release never sits undocumented for long.
+  workflow_dispatch:
+  schedule:
+    - cron: '17 6 * * *'
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The released chore, not a build from source: this site should describe
+      # the language people can actually install, not whatever is on main.
+      - name: Install chore
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/getchore/chore/main/installers/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - run: chore --version
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      # The reference is generated, so a build that quietly fell back to the
+      # committed snapshot would ship a stale page. Fail instead.
+      - name: The reference must match the installed chore
+        run: |
+          built=$(node -e "process.stdout.write(require('./dist/spec.json').version)")
+          have=$(chore --version | awk '{print $2}')
+          echo "built from $built, chore reports $have"
+          [ "$built" = "$have" ] || { echo "::error::the reference is $built but chore is $have"; exit 1; }
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

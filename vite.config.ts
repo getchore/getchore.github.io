@@ -10,38 +10,47 @@ const INSTALLERS = ['install.sh', 'install.ps1']
 
 /**
  * The install one-liners point at this site, so the scripts have to ship with
- * it. They stay in installers/ — CI lints them there — and are copied into the
- * build. A missing or empty script would deploy a site whose headline command
- * 404s, so this fails the build instead of shipping quietly.
+ * it -- but they live in the chore repo, where CI lints them and where they
+ * are versioned with the thing they install. Keeping a copy here would be a
+ * second source of truth for the one file that must never be wrong.
+ *
+ * So: a side-by-side checkout if there is one, otherwise fetched from the
+ * chore repo at build time. Either way the build fails rather than deploying
+ * a site whose headline command 404s.
  */
 function installers(): Plugin {
+  const RAW = 'https://raw.githubusercontent.com/getchore/chore/main/installers'
+
   return {
     name: 'installers',
     apply: 'build',
-    buildStart() {
+    async closeBundle() {
       for (const name of INSTALLERS) {
-        const src = here(`../installers/${name}`)
-        if (!existsSync(src)) {
-          this.error(`installers/${name} is missing — the site publishes it at /${name}`)
+        const local = here(`../chore/installers/${name}`)
+        let text: string
+        let from: string
+
+        if (existsSync(local) && statSync(local).size > 0) {
+          text = readFileSync(local, 'utf8')
+          from = 'checkout'
+        } else {
+          const res = await fetch(`${RAW}/${name}`)
+          if (!res.ok) {
+            this.error(`cannot fetch ${name} from the chore repo (${res.status}) -- the install command would 404`)
+          }
+          text = await res.text()
+          from = 'chore repo'
         }
-        if (statSync(src).size === 0) {
-          this.error(`installers/${name} is empty — refusing to publish an empty installer`)
+
+        if (!text.trim()) {
+          this.error(`${name} came back empty -- refusing to publish an empty installer`)
         }
-      }
-    },
-    closeBundle() {
-      for (const name of INSTALLERS) {
-        copyFileSync(here(`../installers/${name}`), here(`./dist/${name}`))
-        const out = here(`./dist/${name}`)
-        if (!existsSync(out) || statSync(out).size === 0) {
-          throw new Error(`dist/${name} did not land — the install command would 404`)
-        }
-        console.log(`  installers  dist/${name}  ${(statSync(out).size / 1024).toFixed(1)} kB`)
+        writeFileSync(here(`./dist/${name}`), text)
+        console.log(`  installers  dist/${name}  ${(text.length / 1024).toFixed(1)} kB  (${from})`)
       }
     },
   }
 }
-
 
 /**
  * The language reference is generated, never written. `chore spec` emits the
@@ -59,8 +68,9 @@ function spec(): Plugin {
   const snapshot = here('./src/spec.json')
   const candidates = [
     process.env.CHORE_BIN,
-    here('../target/release/chore'),
-    here('../target/debug/chore'),
+    // A side-by-side checkout of the chore repo, for working on both at once.
+    here('../chore/target/release/chore'),
+    here('../chore/target/debug/chore'),
     'chore',
   ].filter(Boolean) as string[]
 
@@ -131,7 +141,6 @@ function older(a: string, b: string): boolean {
  * models read best; `/spec.json` ships alongside for anything programmatic.
  */
 function llms(): Plugin {
-  const base = () => (process.env.VITE_BASE ?? '/').replace(/\/$/, '')
   const site = 'https://getchore.github.io'
 
   return {
@@ -139,7 +148,7 @@ function llms(): Plugin {
     apply: 'build',
     closeBundle() {
       const spec = JSON.parse(readFileSync(here('./src/spec.json'), 'utf8'))
-      const url = (p: string) => `${site}${base()}${p}`
+      const url = (p: string) => `${site}${p}`
 
       const index = [
         '# chore',
@@ -253,9 +262,9 @@ function llms(): Plugin {
   }
 }
 
-// `base` is overridden in CI for GitHub project pages: VITE_BASE=/chore/
+// Served at the root of getchore.github.io, so there is no base path.
 export default defineConfig({
-  base: process.env.VITE_BASE ?? '/',
+  base: '/',
   plugins: [react(), installers(), spec(), llms()],
   resolve: {
     alias: {
