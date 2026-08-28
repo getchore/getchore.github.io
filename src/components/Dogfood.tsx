@@ -4,7 +4,10 @@ import { EXTERNAL, Section } from './ui'
 
 const LINKS = [
   { path: 'chorefile', href: `${GITHUB_URL}/blob/main/chorefile` },
-  { path: 'website/chorefile', href: `${GITHUB_URL}/blob/main/website/chorefile` },
+  {
+    path: 'getchore.github.io/chorefile',
+    href: 'https://github.com/getchore/getchore.github.io/blob/main/chorefile',
+  },
 ]
 
 export function Dogfood() {
