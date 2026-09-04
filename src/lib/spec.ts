@@ -55,7 +55,9 @@ export type Spec = {
   namespace_separator: string
 }
 
-export const spec = { files: [], ...(raw as unknown as Spec) }
+const loaded = raw as unknown as Spec
+/** `files` arrived in chore 1.10.0; an older snapshot renders with no such section. */
+export const spec: Spec = { ...loaded, files: loaded.files ?? [] }
 
 /** Distinct `scope` values, in the order the spec lists them. */
 export function scopes(): string[] {
