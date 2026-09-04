@@ -18,6 +18,7 @@ import { scopes, spec, variablesIn } from '../lib/spec'
  */
 
 const SECTIONS = [
+  { id: 'files', title: 'Files', count: spec.files.length },
   { id: 'rules', title: 'Rules', count: spec.rules.length },
   { id: 'builtins', title: 'Builtins', count: spec.builtins.length },
   { id: 'variables', title: 'Variables', count: spec.variables.length },
@@ -577,6 +578,19 @@ export function ReferencePage() {
         </nav>
 
         <div className={css({ minW: '0' })}>
+          <Sec
+            id="files"
+            title="Files"
+            intro="What the files are called. One name is discovered, one extension is included, and a fragment is named for what it covers."
+          >
+            <Rows
+              rows={spec.files.map((f) => ({
+                term: f.name,
+                meaning: f.examples === f.name ? f.meaning : `${f.meaning} Examples: ${f.examples.split('  ').map((e) => `\`${e}\``).join(', ')}.`,
+              }))}
+            />
+          </Sec>
+
           <Sec
             id="rules"
             title="Rules"

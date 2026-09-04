@@ -38,9 +38,12 @@ export type SyntaxForm = { name: string; syntax: string; example: string; meanin
 export type Condition = { syntax: string; meaning: string }
 export type Chain = { symbol: string; meaning: string }
 export type Named = { name: string; rule: string }
+/** One kind of file, by the shape of its name; `examples` are two-space separated. */
+export type FileKind = { name: string; examples: string; summary: string; meaning: string }
 
 export type Spec = {
   version: string
+  files: FileKind[]
   builtins: Builtin[]
   variables: Variable[]
   syntax: SyntaxForm[]

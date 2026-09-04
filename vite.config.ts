@@ -190,6 +190,13 @@ function llms(): Plugin {
 
       full.push(
         section(
+          'Files',
+          spec.files.map(
+            (f: { name: string; examples: string; meaning: string }) =>
+              `- **${f.name}** (${f.examples.split('  ').map((e: string) => `\`${e}\``).join(', ')}): ${f.meaning}`,
+          ),
+        ),
+        section(
           'Rules that surprise people',
           spec.rules.map((r: { name: string; rule: string }) => `- **${r.name}**: ${r.rule}`),
         ),

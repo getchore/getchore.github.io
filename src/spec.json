@@ -1,5 +1,31 @@
 {
-  "version": "1.6.0",
+  "version": "1.9.1",
+  "files": [
+    {
+      "name": "chorefile",
+      "examples": "chorefile",
+      "summary": "the project's tasks; the only name discovered, walking up from the working directory",
+      "meaning": "The project's tasks. Found by walking up from the working directory to the first file with exactly this name, lowercase, no extension; nothing else is ever discovered, and the directory holding it is `$ROOT`. `chore init` writes one."
+    },
+    {
+      "name": "<name>.chore",
+      "examples": "rust.chore  release.chore  docker.chore",
+      "summary": "a fragment, named for what it covers: `include rust.chore`; never found on its own",
+      "meaning": "A fragment of this project, named for what it covers and pulled in with `include rust.chore` or `include tasks/rust.chore`. Discovery never finds one, so it only means anything merged into the chorefile that includes it; `chore --file rust.chore` reads one on its own."
+    },
+    {
+      "name": "<dir>/",
+      "examples": "include web  include libs as libs",
+      "summary": "`include web` means web/chorefile: a subproject that also runs from inside",
+      "meaning": "A directory in an `include` means the `chorefile` inside it: a subproject that also runs from inside, where `cd web && chore build` finds that file and `$ROOT` is `web/`. Name a directory-shaped include only for something that really is its own project; `check` warns otherwise."
+    },
+    {
+      "name": ".chore/",
+      "examples": ".chore/state",
+      "summary": "state written by `changed`; add it to .gitignore",
+      "meaning": "State the `changed` builtin records, under `$ROOT`. Add `.chore/` to `.gitignore`."
+    }
+  ],
   "builtins": [
     {
       "name": "download",
@@ -169,10 +195,18 @@
     },
     {
       "name": "env",
-      "usage": "env <NAME> [value]",
+      "usage": "env <NAME> [value], or env NAME=value <cmd> [args...]",
       "summary": "read or set an environment variable",
-      "description": "With one argument it prints the value, or exits 1 when the name is unset — a nonzero exit rather than an error, so `if env CI { }` works. With two it sets the variable for the rest of the run and for every process the run spawns. Reading still happens under --dry; setting does not.",
-      "effects": true,
+      "description": "With one argument it prints the value, or exits 1 when the name is unset — a nonzero exit rather than an error, so `if env CI { }` works. With two it sets the variable for the rest of the call: the task that set it, everything that task calls, and every process spawned inside it, and it is gone when the task returns — the same scope `cd` and a local have. `env NAME=value <cmd>` sets names for one command only, the way `NAME=value cmd` does in a shell; the command resolves task, then builtin, then PATH, like any other, and a task called this way keeps the names for its whole call. A `^` may only prefix a statement's command name, so it cannot appear there. If the first argument contains an `=` it is that form. To read a variable into a word rather than onto stdout, write `$env::NAME`, which reads through the same overlay and fails the run when the name is unset — `env NAME` is the form whose miss is an answer, which is why it is the one to put in an `if` or a `try`. Chore never changes its own process environment, so a `parallel` sibling cannot see what another sibling set. Reading and setting both happen under --dry, since neither has an effect outside the run.",
+      "effects": false,
+      "flags": []
+    },
+    {
+      "name": "dotenv",
+      "usage": "dotenv <path> [optional]",
+      "summary": "load a .env file for the rest of the call",
+      "description": "Reads `KEY=value` lines and binds them for the rest of the call — the task that loaded it, everything that task calls, and every process spawned inside it — exactly the scope `env NAME value` has, and gone when the task returns. A name that is already set wins over the file, whether the process environment, an earlier `env` or an earlier `dotenv` set it, so `FOO=1 chore deploy` and a CI variable still override a file that is checked in. `optional` skips a missing file; without it, a missing file fails. The path is relative to the task's current directory, like every other builtin path. The format is blank lines, `#` comments, an optional `export ` prefix, and values written bare, 'single-quoted' (literal) or \"double-quoted\" (with \\n, \\t, \\\\ and \\\" escapes); there is no ${OTHER} expansion. It runs under --dry: reading a file is an input, not an effect, and a preview whose conditions read $env::NAME has to see the same values a run would. Written at the top level instead — `dotenv .env` on its own line — it loads once, before the top-level assignments, so a global can read $env::NAME.",
+      "effects": false,
       "flags": []
     },
     {
@@ -188,6 +222,14 @@
       "usage": "sleep <seconds>",
       "summary": "wait",
       "description": "Fractional seconds are allowed. Skipped under --dry, which is meant to be instant.",
+      "effects": true,
+      "flags": []
+    },
+    {
+      "name": "spawn",
+      "usage": "spawn <cmd> [args...]",
+      "summary": "start a program and do not wait for it",
+      "description": "The replacement for `nohup ./app > log 2>&1 &`. The program is looked up on PATH only — a task or a builtin is an error, since what `spawn` starts has to outlive chore — and the run carries on without waiting. The child is detached: its own process group on Unix, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP on Windows, so it survives the terminal that started the run. stdin is null, and so are stdout and stderr unless the statement redirects them: a process that outlives the run must not keep writing to the terminal. `> log` takes both streams; `2> err` splits them again. `> log 2>&1` is accepted and means what the bare `> log` means, for people arriving from `nohup ./app > log 2>&1 &`. The pid is reported on stderr. Skipped under --dry, which opens no file either.",
       "effects": true,
       "flags": []
     },
@@ -286,7 +328,19 @@
       "name": "interpolation",
       "syntax": "$name  \"$name/lib\"  $1  $@  $#",
       "example": "cargo build --target-dir \"$ROOT/target\"",
-      "meaning": "Substitute a variable. `$1`, `$2`, ... are a task's parameters, `$@` all of them as separate words, `$#` the count."
+      "meaning": "Substitute a variable. `$1`, `$2`, ... are a task's parameters, `$@` all of them as separate words, `$#` the count. An empty value written unquoted expands to no word at all rather than to an empty argument, as in sh, so quote it — `\"$1\"` — wherever the position matters; `--dry` prints the argv that survived."
+    },
+    {
+      "name": "environment",
+      "syntax": "$env::NAME",
+      "example": "./deploy $env::REGION",
+      "meaning": "Read an environment variable. It is looked up through the same overlay `env` writes, so a value set by `env NAME value`, by `env NAME=value <cmd>` or by a `dotenv` is what it sees, and the process environment answers when nothing did. An unset name fails the run, like any other undefined variable; where a name may be absent, use the forms whose miss is an answer — `if env NAME { }` or `x=$(try env NAME)`. `env` is a reserved namespace: `include ... as env` is an error, and `env::X=...` is not an assignment."
+    },
+    {
+      "name": "dotenv directive",
+      "syntax": "dotenv <path> [optional]",
+      "example": "dotenv .env\ndotenv .env.local optional",
+      "meaning": "Load a `.env` file. At the top level the path is relative to the file that wrote the directive and it loads once, before the top-level assignments, so a global may read $env::NAME; `list`, `help`, `check` and `spec` never load one, exactly as they never evaluate a global. Inside a task it is a builtin: the path is relative to the task's current directory, and what it binds dies with the call. A variable that is already set wins over the file, so a CI override still works, and `optional` skips a file that is missing."
     },
     {
       "name": "capture",
@@ -334,7 +388,7 @@
       "name": "task",
       "syntax": "task name [param[=default]...] { }",
       "example": "# Build the release binary\ntask build target { cargo build --release --target $target }",
-      "meaning": "Define a task. Parameters bind to `$1`, `$2`, ... in the body. The comment line directly above the `task` is its description, which `chore list` prints."
+      "meaning": "Define a task. Parameters bind to `$1`, `$2`, ... in the body, and a parameter written `name=value` is optional; `name=` alone defaults to the empty string. The task's description, which `chore list` prints, is the first line of the contiguous block of `#` comment lines directly above the `task`, cut at the end of its first sentence — a blank line ends the block, so a file header is not a description."
     },
     {
       "name": "require",
@@ -345,8 +399,8 @@
     {
       "name": "include",
       "syntax": "include path [as name]",
-      "example": "include libs/chorefile as libs",
-      "meaning": "Pull another chorefile in and merge it. Paths resolve relative to the including file, a directory means the chorefile inside it, and `$ROOT` stays the top-level chorefile's directory. `as` namespaces both tasks and globals as `libs::build`; without it everything merges flat, where a duplicate name across two files is an error. A cycle names the whole loop."
+      "example": "include tasks/rust.chore",
+      "meaning": "Pull another chorefile in and merge it. Paths resolve relative to the including file, a directory means the chorefile inside it, and `$ROOT` stays the top-level chorefile's directory. The filename says what is being included: a `.chore` file is a fragment of this project, which discovery never finds on its own, while a directory holding its own `chorefile` is a subproject that can also be run from inside, where `$ROOT` is that directory rather than the project root. `as` namespaces both tasks and globals as `libs::build`; without it everything merges flat, where a duplicate name across two files is an error. A cycle names the whole loop."
     }
   ],
   "conditions": [
@@ -411,6 +465,10 @@
     {
       "symbol": "2>",
       "meaning": "write stderr to a file"
+    },
+    {
+      "symbol": "2>&1",
+      "meaning": "send stderr wherever stdout is going -- a file, a capture, a pipe, or the terminal. Spelled exactly, and it takes no filename. Read after every other redirect on the command, so `> log 2>&1` and `2>&1 > log` both put both streams in `log`, where sh reads the second differently. Into a file the two streams share one handle. A `2> f` on the same command is an error: two places for one stream"
     }
   ],
   "resolution": [
@@ -458,7 +516,7 @@
     },
     {
       "name": "reserved tasks",
-      "rule": "`list`, `help`, `check`, `spec`, `completions` and `init` are subcommands, so a task may not take those names. `::` is reserved in a task name for include namespaces."
+      "rule": "`list`, `help`, `spec`, `completions` and `init` are subcommands, so a task may not take those names. `check` is not reserved: a task named `check` runs when `chore check` is typed, and `chore --check` is the lint whatever the chorefile says. `::` is reserved in a task name for include namespaces."
     },
     {
       "name": "top-level statements",
@@ -476,7 +534,6 @@
   "reserved_tasks": [
     "list",
     "help",
-    "check",
     "spec",
     "completions",
     "init"

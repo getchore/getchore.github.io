@@ -5,8 +5,8 @@ import { EXTERNAL, Section } from './ui'
 const LINKS = [
   { path: 'chorefile', href: `${GITHUB_URL}/blob/main/chorefile` },
   {
-    path: '.github/tasks.chore',
-    href: `${GITHUB_URL}/blob/main/.github/tasks.chore`,
+    path: '.github/ci.chore',
+    href: `${GITHUB_URL}/blob/main/.github/ci.chore`,
   },
 ]
 
