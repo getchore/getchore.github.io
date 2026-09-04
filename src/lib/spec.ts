@@ -55,7 +55,7 @@ export type Spec = {
   namespace_separator: string
 }
 
-export const spec = raw as unknown as Spec
+export const spec = { files: [], ...(raw as unknown as Spec) }
 
 /** Distinct `scope` values, in the order the spec lists them. */
 export function scopes(): string[] {

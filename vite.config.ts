@@ -191,7 +191,9 @@ function llms(): Plugin {
       full.push(
         section(
           'Files',
-          spec.files.map(
+          // Absent from a chore older than 1.10.0, which the snapshot guard
+          // normally keeps off the page; degrade to no section rather than crash.
+          (spec.files ?? []).map(
             (f: { name: string; examples: string; meaning: string }) =>
               `- **${f.name}** (${f.examples.split('  ').map((e: string) => `\`${e}\``).join(', ')}): ${f.meaning}`,
           ),
